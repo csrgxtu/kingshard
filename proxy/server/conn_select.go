@@ -413,6 +413,25 @@ func (c *ClientConn) buildSelectOnlyResult(rs []*mysql.Result,
 	}, nil
 }
 
+// build show tables result
+func (c *ClientConn) buildShowTableResult(rs []*mysql.Result) (*mysql.Result, error) {
+	r := rs[0].Resultset
+	status := c.status | rs[0].Status
+
+	for i := 1; i < len(rs); i++ {
+		status |= rs[i].Status
+		for j := range rs[i].Values {
+			r.Values = append(r.Values, rs[i].Values[j])
+			r.RowDatas = append(r.RowDatas, rs[i].RowDatas[j])
+		}
+	}
+
+	return &mysql.Result{
+		Status:    status,
+		Resultset: r,
+	}, nil
+}
+
 func (c *ClientConn) sortSelectResult(r *mysql.Resultset, stmt *sqlparser.Select) error {
 	if stmt.OrderBy == nil {
 		return nil

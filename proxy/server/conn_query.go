@@ -392,10 +392,11 @@ func (c *ClientConn) mergeExecResult(rs []*mysql.Result) error {
 	}
 	c.affectedRows = int64(r.AffectedRows)
 
-	for i := 0; i < len(rs); i++ {
-		r.Resultset = rs[i].Resultset
-		r.Resultset.RowDatas = rs[i].Resultset.RowDatas
-	}
+	//for i := 0; i < len(rs); i++ {
+	//	r.Resultset = rs[i].Resultset
+	//	r.Resultset.RowDatas = rs[i].Resultset.RowDatas
+	//}
+	r, _ = c.buildShowTableResult(rs)
 
 	//return c.writeOK(r)
 	//return nil
