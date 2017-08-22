@@ -70,49 +70,17 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		return false, errors.ErrCmdUnsupport
 	}
 
-	if c.isInTransaction() {
-		executeDB, err = c.GetTransExecDB(tokens, sql)
-	} else {
-		executeDB, err = c.GetExecDB(tokens, sql)
+	//get connection in DB
+	conns, err := c.getBackendConns(sql, false)
+	if err != nil || conns == nil {
+		return false, err
 	}
 
-	if err != nil {
-		//this SQL doesn't need execute in the backend.
-		if err == errors.ErrIgnoreSQL {
-			err = c.writeOK(nil)
-			if err != nil {
-				return false, err
-			}
-			return true, nil
-		}
-		return false, err
-	}
-	//need shard sql
-	if executeDB == nil {
-		return false, nil
-	}
-	//get connection in DB
-	conn1, err := c.getBackendConn(executeDB.ExecNode, executeDB.IsSlave)
-	defer c.closeConn(conn1, false)
-	if err != nil {
-		return false, err
-	}
-	executeDB.ExecNode = c.proxy.GetNode("node2")
-	conn2, err := c.getBackendConn(executeDB.ExecNode, executeDB.IsSlave)
-	defer c.closeConn(conn2, false)
-	if err != nil {
-		return false, err
-	}
-	//execute.sql may be rewritten in getShowExecDB
-	golog.Info("conn_preshard", "preHandleShard", "will excute sql here", 0)
-	conns := make(map[string]*backend.BackendConn)
-	conns["node1"] = conn1
-	conns["node2"] = conn2
 	sqls := make(map[string][]string)
-	sqls["node1"] = []string{executeDB.sql}
-	sqls["node2"] = []string{executeDB.sql}
+	for i := 0; i < len(conns); i++ {
+		sqls[""] = []string{sql}
+	}
 	rs, err = c.executeInMultiNodes(conns, sqls, nil)
-	//rs, err = c.executeInNode(conn, executeDB.sql, nil)
 	if err != nil {
 		return false, err
 	}
@@ -123,22 +91,10 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		return false, mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
 	}
 
-
-	//c.lastInsertId = int64(rs[0].InsertId)
-	//c.affectedRows = int64(rs[0].AffectedRows)
-	//c.writeResultset(c.status, rs[1].Resultset)
 	err = c.mergeExecResult(rs)
-	//
-	//if rs[0].Resultset != nil {
-	//	golog.Info("ClientConn", "handleUnsupport", "dfjaslfjsdlafjldsafjslad", 0)
-	//	err = c.writeResultset(c.status, rs[1].Resultset)
-	//} else {
-	//	err = c.writeOK(rs[0])
-	//}
-	//
-	//if err != nil {
-	//	return false, err
-	//}
+	if err != nil {
+		return false, err
+	}
 
 	return true, nil
 }

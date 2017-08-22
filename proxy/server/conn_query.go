@@ -156,6 +156,43 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 	return
 }
 
+// get all connections to the database
+func (c *ClientConn) getBackendConns(sql string, fromSlave bool) (map[string]*backend.BackendConn, error) {
+	tokens := strings.FieldsFunc(sql, hack.IsSqlSep)
+	conns := make(map[string]*backend.BackendConn)
+
+	for _, v := range c.proxy.nodes {
+		if c.isInTransaction() {
+			executeDB, err = c.GetTransExecDB(tokens, sql)
+		} else {
+			executeDB, err = c.GetExecDB(tokens, sql)
+		}
+
+		conn, err := c.getBackendConn(executeDB.ExecNode, executeDB.IsSlave)
+		if err != nil {
+			//this SQL doesn't need execute in the backend.
+			if err == errors.ErrIgnoreSQL {
+				err = c.writeOK(nil)
+				if err != nil {
+					return nil, err
+				}
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		if executeDB == nil {
+			return nil, nil
+		}
+
+		conns[v.Cfg.Name] = conn
+	}
+
+	defer c.closeConn(conn, false)
+
+	return conns, nil
+}
+
 //获取shard的conn，第一个参数表示是不是select
 func (c *ClientConn) getShardConns(fromSlave bool, plan *router.Plan) (map[string]*backend.BackendConn, error) {
 	var err error
