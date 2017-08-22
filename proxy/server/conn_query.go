@@ -59,6 +59,7 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 		return err
 	}
 	if hasHandled {
+		golog.Info("conn_query", "handleQuery", "handleQuery", 0)
 		return nil
 	}
 
@@ -391,5 +392,12 @@ func (c *ClientConn) mergeExecResult(rs []*mysql.Result) error {
 	}
 	c.affectedRows = int64(r.AffectedRows)
 
-	return c.writeOK(r)
+	for i := 0; i < len(rs); i++ {
+		r.Resultset = rs[i].Resultset
+		r.Resultset.RowDatas = rs[i].Resultset.RowDatas
+	}
+
+	//return c.writeOK(r)
+	//return nil
+	return c.writeResultset(c.status, r.Resultset)
 }
